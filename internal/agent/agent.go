@@ -8,6 +8,7 @@ import (
 	"ai-agent-assistant/internal/config"
 	"ai-agent-assistant/internal/llm"
 	"ai-agent-assistant/internal/memory"
+	"ai-agent-assistant/internal/rag"
 	"ai-agent-assistant/internal/tools"
 	"ai-agent-assistant/pkg/models"
 )
@@ -18,6 +19,7 @@ type Agent struct {
 	llmManager  *llm.LLMManager
 	memoryMgr   *memory.MemoryManager
 	toolManager *tools.ToolManager
+	rag         *rag.RAG
 }
 
 // NewAgent 创建智能体
@@ -34,11 +36,18 @@ func NewAgent(cfg *config.Config) (*Agent, error) {
 	// 初始化工具管理器
 	toolMgr := tools.NewToolManager(cfg.Tools.Enabled)
 
+	// 初始化RAG系统
+	ragSystem, err := rag.NewRAG(cfg)
+	if err != nil {
+		return nil, fmt.Errorf("failed to init RAG: %w", err)
+	}
+
 	return &Agent{
 		config:      cfg,
 		llmManager:  llmMgr,
 		memoryMgr:   memoryMgr,
 		toolManager: toolMgr,
+		rag:         ragSystem,
 	}, nil
 }
 
@@ -67,6 +76,20 @@ func (a *Agent) Chat(ctx context.Context, req *models.ChatRequest) (*models.Chat
 
 	// 获取历史消息
 	history, _ := a.memoryMgr.GetHistory(req.SessionID)
+
+	// RAG增强：如果启用RAG，检索相关知识并增强用户消息
+	if req.UseRAG {
+		ragContext, err := a.rag.BuildContext(ctx, req.Message, 3) // 检索top-3
+		if err == nil && ragContext != "" {
+			// 创建增强的消息内容
+			enhancedMsg := models.Message{
+				Role:    "system",
+				Content: ragContext,
+			}
+			// 将RAG上下文插入到历史记录的开头
+			history = append([]models.Message{enhancedMsg}, history...)
+		}
+	}
 
 	// 获取LLM提供商
 	provider, err := a.llmManager.GetProvider(modelName)

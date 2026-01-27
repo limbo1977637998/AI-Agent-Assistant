@@ -1,12 +1,13 @@
 # AI Agent Assistant
 
-智能对话Agent应用后端，支持多模型切换、工具调用和对话记忆管理。
+智能对话Agent应用后端，支持多模型切换、工具调用、对话记忆和RAG知识库。
 
 ## 特性
 
 - **多模型支持**: 支持智谱GLM-4和阿里云千问模型
 - **工具调用**: 内置计算器、天气查询、网络搜索等工具
 - **对话记忆**: 自动管理对话历史，支持多会话
+- **RAG知识库**: 检索增强生成，支持自定义知识库
 - **流式输出**: 支持流式和非流式响应
 - **RESTful API**: 简洁的HTTP接口设计
 
@@ -16,6 +17,8 @@
 - **Web框架**: Gin
 - **配置管理**: Viper
 - **HTTP客户端**: 标准库 net/http
+- **向量化**: GLM Embedding-2
+- **向量存储**: 内存向量数据库
 
 ## 项目结构
 
@@ -30,11 +33,18 @@ ai-agent-assistant/
 │   ├── handler/             # HTTP处理器
 │   ├── llm/                 # 大模型集成
 │   ├── memory/              # 记忆管理
+│   ├── rag/                 # RAG知识库
+│   │   ├── parser/          # 文档解析
+│   │   ├── chunker/         # 文本分块
+│   │   ├── embedding/       # 向量化
+│   │   ├── retriever/       # 检索器
+│   │   └── store/           # 向量存储
 │   └── tools/               # 工具集
 ├── pkg/
 │   └── models/              # 数据模型
 ├── config.yaml              # 配置文件
 ├── go.mod
+├── RAG_GUIDE.md             # RAG功能测试指南
 └── README.md
 ```
 
@@ -159,6 +169,52 @@ curl -X POST http://localhost:8080/api/v1/chat \
     "model": "qwen"
   }'
 ```
+
+### RAG增强对话
+
+```bash
+curl -X POST http://localhost:8080/api/v1/chat/rag \
+  -H "Content-Type: application/json" \
+  -d '{
+    "session_id": "test-rag",
+    "message": "请介绍Go语言的特点",
+    "model": "glm"
+  }'
+```
+
+**注意**: 使用RAG功能前，需要先通过知识库管理API添加知识内容。
+
+### 知识库管理
+
+#### 添加知识
+
+```bash
+curl -X POST http://localhost:8080/api/v1/knowledge/add \
+  -H "Content-Type: application/json" \
+  -d '{
+    "text": "Go语言是Google开发的静态类型编程语言",
+    "source": "Go语言介绍"
+  }'
+```
+
+#### 查看知识库统计
+
+```bash
+curl http://localhost:8080/api/v1/knowledge/stats
+```
+
+#### 搜索知识库
+
+```bash
+curl -X POST http://localhost:8080/api/v1/knowledge/search \
+  -H "Content-Type: application/json" \
+  -d '{
+    "query": "Go语言",
+    "top_k": 3
+  }'
+```
+
+**详细说明**: 查看 [RAG_GUIDE.md](RAG_GUIDE.md)
 
 ## 工具说明
 

@@ -6,6 +6,8 @@ type ChatRequest struct {
 	Message   string                 `json:"message"`
 	Model     string                 `json:"model,omitempty"`     // glm or qwen
 	Stream    bool                   `json:"stream,omitempty"`
+	WithTools bool                   `json:"with_tools,omitempty"` // 是否启用工具调用
+	UseRAG    bool                   `json:"use_rag,omitempty"`    // 是否启用RAG
 	Metadata  map[string]interface{} `json:"metadata,omitempty"`
 }
 
