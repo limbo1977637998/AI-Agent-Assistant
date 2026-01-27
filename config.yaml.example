@@ -1,0 +1,30 @@
+server:
+  port: 8080
+  mode: debug  # debug, release, test
+
+agent:
+  default_model: glm  # glm or qwen
+  max_tokens: 2000
+  temperature: 0.7
+  enable_stream: true
+
+models:
+  glm:
+    api_key: "your-glm-api-key-here"
+    base_url: "https://open.bigmodel.cn/api/paas/v4"
+    model: "glm-4-flash"
+
+  qwen:
+    api_key: "your-qwen-api-key-here"
+    base_url: "https://dashscope.aliyuncs.com/compatible-mode/v1"
+    model: "qwen-plus"
+
+memory:
+  max_history: 10
+  store_type: "memory"  # memory or redis
+
+tools:
+  enabled:
+    - calculator
+    - weather
+    - search
