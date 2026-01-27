@@ -9,6 +9,7 @@ import (
 	"ai-agent-assistant/internal/rag/embedding"
 	"ai-agent-assistant/internal/rag/parser"
 	"ai-agent-assistant/internal/rag/store"
+	"ai-agent-assistant/internal/vectordb"
 )
 
 // RAG RAG系统
@@ -26,14 +27,54 @@ func NewRAG(cfg *config.Config) (*RAG, error) {
 	p := parser.NewParser()
 	c := chunker.NewChunker(chunker.DefaultChunkSize, chunker.DefaultOverlap)
 
-	// 初始化embedding提供者
-	ep, err := embedding.NewEmbeddingProvider(cfg.Models.GLM)
+	// 初始化embedding提供者 - 根据配置选择GLM或千问
+	embeddingModel := cfg.Agent.EmbeddingModel
+	if embeddingModel == "" {
+		embeddingModel = "glm" // 默认使用GLM
+	}
+
+	var modelConfig config.ModelConfig
+	switch embeddingModel {
+	case "qwen":
+		modelConfig = cfg.Models.Qwen
+	case "glm":
+		modelConfig = cfg.Models.GLM
+	default:
+		return nil, fmt.Errorf("unsupported embedding model: %s", embeddingModel)
+	}
+
+	ep, err := embedding.NewEmbeddingProvider(embeddingModel, modelConfig)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create embedding provider: %w", err)
 	}
 
-	// 初始化向量存储（内存存储）
-	vs := store.NewInMemoryVectorStore(ep)
+	// 初始化向量存储
+	var vs store.VectorStore
+
+	// 根据配置选择向量存储后端
+	if cfg.VectorDB.Provider == "milvus" {
+		// 使用Milvus向量存储
+		milvusConfig := &vectordb.MilvusConfig{
+			Address:  cfg.VectorDB.Milvus.Address,
+			Username: "",
+			Password: "",
+			Database: "default",
+		}
+
+		milvusClient, err := vectordb.NewMilvusClient(milvusConfig)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create milvus client: %w", err)
+		}
+
+		vs = store.NewMilvusVectorStore(
+			milvusClient,
+			cfg.VectorDB.Milvus.CollectionName,
+			cfg.VectorDB.Milvus.Dimension,
+		)
+	} else {
+		// 使用内存向量存储（默认）
+		vs = store.NewInMemoryVectorStore(ep)
+	}
 
 	return &RAG{
 		parser:    p,

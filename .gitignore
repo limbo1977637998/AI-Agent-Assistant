@@ -42,3 +42,7 @@ Thumbs.db
 config.yaml
 *.key
 secrets/
+
+# Docker volumes and runtime data
+volumes/
+data/

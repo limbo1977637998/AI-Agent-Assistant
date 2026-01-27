@@ -8,6 +8,8 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+
+	aiagenthttp "ai-agent-assistant/pkg/http"
 )
 
 // Tool 工具接口
@@ -205,7 +207,8 @@ func (t *SearchTool) Execute(ctx context.Context, args map[string]interface{}) (
 	// 使用DuckDuckGo进行搜索（简化版）
 	searchURL := fmt.Sprintf("https://api.duckduckgo.com/?q=%s&format=json", url.QueryEscape(query))
 
-	resp, err := http.Get(searchURL)
+	client := aiagenthttp.NewClient()
+	resp, err := client.Get(searchURL)
 	if err != nil {
 		return "", fmt.Errorf("search failed: %w", err)
 	}
@@ -237,6 +240,86 @@ func (t *SearchTool) Execute(ctx context.Context, args map[string]interface{}) (
 	return sb.String(), nil
 }
 
+// StockQuoteTool 股票报价工具
+type StockQuoteTool struct{}
+
+func NewStockQuoteTool() *StockQuoteTool {
+	return &StockQuoteTool{}
+}
+
+func (t *StockQuoteTool) Name() string {
+	return "stock_quote"
+}
+
+func (t *StockQuoteTool) Description() string {
+	return "查询股票实时报价。参数：symbol（股票代码，如AAPL、TSLA等）"
+}
+
+func (t *StockQuoteTool) Execute(ctx context.Context, args map[string]interface{}) (string, error) {
+	symbol, ok := args["symbol"].(string)
+	if !ok {
+		return "", fmt.Errorf("missing symbol argument")
+	}
+
+	// 使用Yahoo Finance API
+	url := fmt.Sprintf("https://query1.finance.yahoo.com/v8/finance/chart/%s", symbol)
+
+	req, _ := http.NewRequestWithContext(ctx, "GET", url, nil)
+	req.Header.Set("User-Agent", "Mozilla/5.0")
+
+	client := aiagenthttp.NewClient()
+	resp, err := client.Do(req)
+	if err != nil {
+		return fmt.Sprintf("股票查询暂时不可用，请稍后再试。\n\n您可以访问以下网站查询 %s 的股价：\n- 雅虎财经：https://finance.yahoo.com/quote/%s\n- 谷歌财经：https://www.google.com/finance?q=%s\n- 新浪财经：http://finance.sina.com.cn/realstock/company/%s.shtml",
+			symbol, symbol, symbol, symbol), nil
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Sprintf("读取股票数据失败：%v", err), nil
+	}
+
+	// 检查是否被限流
+	if strings.Contains(string(body), "Too Many Requests") || resp.StatusCode == 429 {
+		return fmt.Sprintf("股票查询请求过于频繁，请稍后再试。\n\n您可以访问以下网站手动查询 %s 的股价：\n1. 雅虎财经：https://finance.yahoo.com/quote/%s\n2. 谷歌财经：https://www.google.com/finance?q=%s",
+			symbol, symbol, symbol), nil
+	}
+
+	var result struct {
+		Chart struct {
+			Result []struct {
+				Meta struct {
+					Currency             string  `json:"currency"`
+					Symbol               string  `json:"symbol"`
+					ExchangeName         string  `json:"exchangeName"`
+					InstrumentType       string  `json:"instrumentType"`
+					RegularMarketPrice   float64 `json:"regularMarketPrice"`
+					PreviousClose        float64 `json:"previousClose"`
+				} `json:"meta"`
+			} `json:"result"`
+		} `json:"chart"`
+	}
+
+	if err := json.Unmarshal(body, &result); err != nil {
+		return fmt.Sprintf("解析股票数据失败：%v\n\n您可以在以下网站查询 %s：\n- 雅虎财经：https://finance.yahoo.com/quote/%s", err, symbol, symbol), nil
+	}
+
+	if len(result.Chart.Result) == 0 {
+		return fmt.Sprintf("未找到股票代码: %s\n\n请确认股票代码是否正确。常见的美国股票代码：\n- 苹果: AAPL\n- 微软: MSFT\n- 谷歌: GOOGL\n- 亚马逊: AMZN\n- 特斯拉: TSLA", symbol), nil
+	}
+
+	meta := result.Chart.Result[0].Meta
+	change := meta.RegularMarketPrice - meta.PreviousClose
+	changePercent := (change / meta.PreviousClose) * 100
+
+	return fmt.Sprintf("%s (%s)\n当前价格: %.2f %s\n前收盘价: %.2f %s\n涨跌: %.2f (%.2f%%)",
+		meta.Symbol, meta.ExchangeName,
+		meta.RegularMarketPrice, meta.Currency,
+		meta.PreviousClose, meta.Currency,
+		change, changePercent), nil
+}
+
 // ToolManager 工具管理器
 type ToolManager struct {
 	tools map[string]Tool
@@ -245,9 +328,10 @@ type ToolManager struct {
 // NewToolManager 创建工具管理器
 func NewToolManager(enabledTools []string) *ToolManager {
 	allTools := map[string]Tool{
-		"calculator": NewCalculatorTool(),
-		"weather":    NewWeatherTool(),
-		"search":     NewSearchTool(),
+		"calculator":  NewCalculatorTool(),
+		"weather":     NewWeatherTool(),
+		"search":      NewSearchTool(),
+		"stock_quote": NewStockQuoteTool(),
 	}
 
 	manager := &ToolManager{
@@ -261,6 +345,11 @@ func NewToolManager(enabledTools []string) *ToolManager {
 	}
 
 	return manager
+}
+
+// RegisterTool 注册工具
+func (m *ToolManager) RegisterTool(tool Tool) {
+	m.tools[tool.Name()] = tool
 }
 
 // GetTool 获取工具

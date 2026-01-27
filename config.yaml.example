@@ -2,29 +2,102 @@ server:
   port: 8080
   mode: debug  # debug, release, test
 
+# HTTP代理配置（可选，用于访问国外API）
+proxy:
+  enabled: false
+  http_proxy: "http://127.0.0.1:7897"   # 代理地址
+  https_proxy: "http://127.0.0.1:7897"  # 代理地址
+  no_proxy: "localhost,127.0.0.1"
+
 agent:
   default_model: glm  # glm or qwen
+  embedding_model: qwen  # glm or qwen - 使用千问的embedding
   max_tokens: 2000
   temperature: 0.7
   enable_stream: true
 
 models:
   glm:
-    api_key: "your-glm-api-key-here"
+    api_key: "your-glm-api-key"  # 智谱GLM API Key
     base_url: "https://open.bigmodel.cn/api/paas/v4"
     model: "glm-4-flash"
 
   qwen:
-    api_key: "your-qwen-api-key-here"
+    api_key: "your-qwen-api-key"  # 阿里云千问 API Key
     base_url: "https://dashscope.aliyuncs.com/compatible-mode/v1"
     model: "qwen-plus"
 
+# 数据库配置
+database:
+  provider: "mysql"  # mysql, postgres, sqlite
+  mysql:
+    host: "localhost"
+    port: 3306
+    database: "agent_db"
+    user: "root"
+    password: "your_mysql_password"
+    charset: "utf8mb4"
+    parse_time: true
+    loc: "Local"
+    max_open_conns: 25
+    max_idle_conns: 5
+    conn_max_lifetime: "5m"
+
+# 向量数据库配置
+vectordb:
+  provider: "memory"  # milvus, qdrant, chroma, memory
+  milvus:
+    address: "localhost:19530"
+    collection_name: "agent_knowledge"
+    dimension: 1024  # 千问 text-embedding-v3: 1024, GLM embedding-2: 1024
+    index_type: "HNSW"  # HNSW, IVF_FLAT, IVF_SQ8
+    metric_type: "COSINE"  # COSINE, L2, IP
+    embedding_model: "embedding-2"
+
+# Redis缓存配置
+cache:
+  enabled: true
+  provider: "redis"
+  redis:
+    addr: "localhost:6379"
+    password: "your_redis_password"
+    db: 0
+    pool_size: 10
+    # 缓存策略
+    tool_result_ttl: "1h"      # 工具结果缓存1小时
+    llm_response_ttl: "5m"     # LLM响应缓存5分钟
+    session_ttl: "24h"         # 会话缓存24小时
+    knowledge_cache_ttl: "30m" # 知识检索缓存30分钟
+
+# RAG配置
+rag:
+  enabled: true
+  top_k: 3                    # 检索TopK数量
+  threshold: 0.3              # 相似度阈值
+  chunk_size: 500             # 分块大小
+  chunk_overlap: 50           # 分块重叠
+  enable_hybrid_search: false # 混合检索(向量+关键词)
+
 memory:
   max_history: 10
-  store_type: "memory"  # memory or redis
+  store_type: "mysql"  # memory, mysql, redis
+  enable_user_memory: true   # 启用用户记忆
+  enable_state_memory: true  # 启用状态记忆
+  memory_optimization: "summarization"  # summarization, time_decay, importance
 
 tools:
   enabled:
     - calculator
     - weather
     - search
+    - stock_quote
+
+# 监控配置
+monitoring:
+  enabled: true
+  prometheus:
+    port: 9090
+    path: "/metrics"
+  tracing:
+    enabled: false  # 暂不启用OpenTelemetry
+    jaeger_endpoint: "http://localhost:4318"

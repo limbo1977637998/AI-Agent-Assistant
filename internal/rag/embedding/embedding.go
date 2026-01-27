@@ -25,6 +25,14 @@ type GLMEmbedding struct {
 	client  *http.Client
 }
 
+// QwenEmbedding 千问向量化提供者
+type QwenEmbedding struct {
+	apiKey  string
+	baseURL string
+	model   string
+	client  *http.Client
+}
+
 // EmbeddingRequest 向量化请求
 type EmbeddingRequest struct {
 	Model string   `json:"model"`
@@ -45,13 +53,32 @@ type EmbeddingResponse struct {
 }
 
 // NewEmbeddingProvider 创建向量化提供者
-func NewEmbeddingProvider(cfg config.ModelConfig) (EmbeddingProvider, error) {
-	return &GLMEmbedding{
-		apiKey:  cfg.APIKey,
-		baseURL: cfg.BaseURL,
-		model:   "embedding-2", // GLM的embedding模型
-		client:  &http.Client{},
-	}, nil
+// provider: "glm" 或 "qwen"
+func NewEmbeddingProvider(provider string, cfg config.ModelConfig) (EmbeddingProvider, error) {
+	switch provider {
+	case "qwen":
+		return &QwenEmbedding{
+			apiKey:  cfg.APIKey,
+			baseURL: cfg.BaseURL,
+			model:   "text-embedding-v3", // 千问的embedding模型
+			client:  &http.Client{},
+		}, nil
+	case "glm":
+		return &GLMEmbedding{
+			apiKey:  cfg.APIKey,
+			baseURL: cfg.BaseURL,
+			model:   "embedding-2", // GLM的embedding模型
+			client:  &http.Client{},
+		}, nil
+	default:
+		// 默认使用GLM
+		return &GLMEmbedding{
+			apiKey:  cfg.APIKey,
+			baseURL: cfg.BaseURL,
+			model:   "embedding-2",
+			client:  &http.Client{},
+		}, nil
+	}
 }
 
 // Embed 将文本向量化
@@ -194,4 +221,118 @@ func sqrt(x float64) float64 {
 		z -= (z*z - x) / (2 * z)
 	}
 	return z
+}
+
+// ========== 千问 Embedding 实现 ==========
+
+// Embed 将文本向量化（千问）
+func (e *QwenEmbedding) Embed(ctx context.Context, text string) ([]float64, error) {
+	// 限制文本长度（千问API限制）
+	if len(text) > 8000 {
+		text = text[:8000]
+	}
+
+	reqBody := EmbeddingRequest{
+		Model: e.model,
+		Input: []string{text},
+	}
+
+	jsonData, err := json.Marshal(reqBody)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal request: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, "POST", e.baseURL+"/embeddings", bytes.NewBuffer(jsonData))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+e.apiKey)
+
+	resp, err := e.client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("API error: status=%d, body=%s", resp.StatusCode, string(body))
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response: %w", err)
+	}
+
+	var embedResp EmbeddingResponse
+	if err := json.Unmarshal(body, &embedResp); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal response: %w", err)
+	}
+
+	if len(embedResp.Data) == 0 {
+		return nil, fmt.Errorf("no embedding in response")
+	}
+
+	return embedResp.Data[0].Embedding, nil
+}
+
+// GetDimension 获取向量维度（千问）
+func (e *QwenEmbedding) GetDimension() int {
+	// 千问 text-embedding-v3 模型的维度默认是1024
+	return 1024
+}
+
+// BatchEmbed 批量向量化（千问）
+func (e *QwenEmbedding) BatchEmbed(ctx context.Context, texts []string) ([][]float64, error) {
+	vectors := make([][]float64, len(texts))
+
+	// 批量请求
+	reqBody := EmbeddingRequest{
+		Model: e.model,
+		Input: texts,
+	}
+
+	jsonData, err := json.Marshal(reqBody)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal request: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, "POST", e.baseURL+"/embeddings", bytes.NewBuffer(jsonData))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+e.apiKey)
+
+	resp, err := e.client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("API error: status=%d, body=%s", resp.StatusCode, string(body))
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response: %w", err)
+	}
+
+	var embedResp EmbeddingResponse
+	if err := json.Unmarshal(body, &embedResp); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal response: %w", err)
+	}
+
+	for _, data := range embedResp.Data {
+		if data.Index < len(vectors) {
+			vectors[data.Index] = data.Embedding
+		}
+	}
+
+	return vectors, nil
 }

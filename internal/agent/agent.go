@@ -7,6 +7,7 @@ import (
 
 	"ai-agent-assistant/internal/config"
 	"ai-agent-assistant/internal/llm"
+	aiagenthttp "ai-agent-assistant/pkg/http"
 	"ai-agent-assistant/internal/memory"
 	"ai-agent-assistant/internal/rag"
 	"ai-agent-assistant/internal/tools"
@@ -24,6 +25,9 @@ type Agent struct {
 
 // NewAgent 创建智能体
 func NewAgent(cfg *config.Config) (*Agent, error) {
+	// 设置HTTP代理配置
+	aiagenthttp.SetConfig(&cfg.Proxy)
+
 	// 初始化LLM管理器
 	llmMgr, err := llm.NewLLMManager(cfg)
 	if err != nil {
@@ -232,17 +236,25 @@ func (a *Agent) ChatWithTools(ctx context.Context, req *models.ChatRequest) (*mo
 
 // detectToolNeeds 检测是否需要使用工具
 func (a *Agent) detectToolNeeds(message string) (string, map[string]interface{}) {
-	// 简单的关键词匹配检测
+	// 1. 股票查询检测（优先级最高，因为通常比较明确）
+	if containsAny(message, []string{"股票", "股价", "报价", "stock", "AAPL", "股市"}) {
+		symbol := extractStockSymbol(message)
+		return "stock_quote", map[string]interface{}{"symbol": symbol}
+	}
+
+	// 2. 天气查询检测
 	if containsAny(message, []string{"天气", "气温", "温度", "weather"}) {
 		// 提取城市名（简化版）
 		city := extractCity(message)
 		return "weather", map[string]interface{}{"city": city}
 	}
 
+	// 3. 计算器检测
 	if containsAny(message, []string{"计算", "加", "减", "乘", "除", "+", "-", "*", "/"}) {
 		return "calculator", map[string]interface{}{"expression": message}
 	}
 
+	// 4. 搜索检测
 	if containsAny(message, []string{"搜索", "查一下", "百度", "search"}) {
 		// 提取搜索关键词（简化版）
 		query := extractSearchQuery(message)
@@ -311,6 +323,74 @@ func extractSearchQuery(message string) string {
 		query = "最新AI新闻"
 	}
 	return query
+}
+
+// extractStockSymbol 提取股票代码
+func extractStockSymbol(message string) string {
+	// 常见的股票代码模式
+	message = strings.ToUpper(message)
+
+	// 检查是否包含括号中的股票代码，如 (AAPL) 或（AAPL）
+	if strings.Contains(message, "(") && strings.Contains(message, ")") {
+		start := strings.Index(message, "(") + 1
+		end := strings.Index(message, ")")
+		if end > start {
+			symbol := message[start:end]
+			if isValidStockSymbol(symbol) {
+				return symbol
+			}
+		}
+	}
+
+	// 检查中文括号（支持中文输入）
+	if strings.Contains(message, "（") && strings.Contains(message, "）") {
+		start := strings.Index(message, "（") + 3
+		end := strings.Index(message, "）")
+		if end > start {
+			symbol := message[start:end]
+			if isValidStockSymbol(symbol) {
+				return symbol
+			}
+		}
+	}
+
+	// 常见股票代码映射
+	stockMap := map[string]string{
+		"苹果":   "AAPL",
+		"微软":   "MSFT",
+		"谷歌":   "GOOGL",
+		"亚马逊":  "AMZN",
+		"特斯拉":  "TSLA",
+		"英伟达":  "NVDA",
+		"腾讯":   "0700.HK",
+		"阿里巴巴": "BABA",
+		"百度":   "BIDU",
+		"京东":   "JD",
+		"美团":   "MPNGF",
+	}
+
+	for name, symbol := range stockMap {
+		if strings.Contains(message, name) {
+			return symbol
+		}
+	}
+
+	// 默认返回苹果
+	return "AAPL"
+}
+
+// isValidStockSymbol 检查是否是有效的股票代码
+func isValidStockSymbol(symbol string) bool {
+	// 股票代码通常是1-5个大写字母或数字
+	if len(symbol) < 1 || len(symbol) > 5 {
+		return false
+	}
+	for _, ch := range symbol {
+		if !((ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9') || ch == '.') {
+			return false
+		}
+	}
+	return true
 }
 
 // ClearSession 清除会话
