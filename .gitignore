@@ -69,3 +69,7 @@ database/*.sql
 # Build artifacts
 /tmp/
 
+
+# Go module cache
+.go/
+
