@@ -57,10 +57,32 @@ run_tests.sh
 *.pid
 nohup.out
 
-# Documentation (work in progress)
+# Documentation (work in progress and internal docs)
 WORK_LOG.md
 TODO_*.md
 CURRENT_STATUS.md
+
+# Phase and test documentation (internal use only)
+PHASE*.md
+TEST_*.md
+*_TEST_*.md
+
+# Summary and analysis documents
+*_SUMMARY.md
+*_ANALYSIS.md
+*_PLAN.md
+*_GUIDE.md
+*_REPORT.md
+
+# Documentation in Chinese (internal docs)
+20*.md
+AI_*.md
+RAG_*.md
+CHUNKER_*.md
+
+# Architecture docs
+*_ARCHITECTURE.md
+*_COMPARISON.md
 
 # Database
 database/*.sql
