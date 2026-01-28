@@ -2,9 +2,9 @@ server:
   port: 8080
   mode: debug  # debug, release, test
 
-# HTTP代理配置（可选，用于访问国外API）
+# HTTP代理配置
 proxy:
-  enabled: false
+  enabled: true
   http_proxy: "http://127.0.0.1:7897"   # 代理地址
   https_proxy: "http://127.0.0.1:7897"  # 代理地址
   no_proxy: "localhost,127.0.0.1"
@@ -18,12 +18,12 @@ agent:
 
 models:
   glm:
-    api_key: "your-glm-api-key"  # 智谱GLM API Key
+    api_key: "YOUR_GLM_API_KEY"
     base_url: "https://open.bigmodel.cn/api/paas/v4"
     model: "glm-4-flash"
 
   qwen:
-    api_key: "your-qwen-api-key"  # 阿里云千问 API Key
+    api_key: "YOUR_QWEN_API_KEY"
     base_url: "https://dashscope.aliyuncs.com/compatible-mode/v1"
     model: "qwen-plus"
 
@@ -35,7 +35,7 @@ database:
     port: 3306
     database: "agent_db"
     user: "root"
-    password: "your_mysql_password"
+    password: "YOUR_MYSQL_PASSWORD"
     charset: "utf8mb4"
     parse_time: true
     loc: "Local"
@@ -49,7 +49,7 @@ vectordb:
   milvus:
     address: "localhost:19530"
     collection_name: "agent_knowledge"
-    dimension: 1024  # 千问 text-embedding-v3: 1024, GLM embedding-2: 1024
+    dimension: 1024  # GLM embedding-2
     index_type: "HNSW"  # HNSW, IVF_FLAT, IVF_SQ8
     metric_type: "COSINE"  # COSINE, L2, IP
     embedding_model: "embedding-2"
@@ -60,7 +60,7 @@ cache:
   provider: "redis"
   redis:
     addr: "localhost:6379"
-    password: "your_redis_password"
+    password: "YOUR_REDIS_PASSWORD"
     db: 0
     pool_size: 10
     # 缓存策略
@@ -91,6 +91,10 @@ tools:
     - weather
     - search
     - stock_quote
+    # 新增工具（待实现）
+    # - time
+    # - file_reader
+    # - finance
 
 # 监控配置
 monitoring:

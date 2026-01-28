@@ -37,6 +37,7 @@ Thumbs.db
 
 # Logs
 *.log
+logs/
 
 # Config (if contains sensitive info)
 config.yaml
@@ -46,3 +47,25 @@ secrets/
 # Docker volumes and runtime data
 volumes/
 data/
+
+# Backup files
+*.bak
+*.bak2
+
+# Test scripts and temporary files
+run_tests.sh
+*.pid
+nohup.out
+
+# Documentation (work in progress)
+WORK_LOG.md
+TODO_*.md
+CURRENT_STATUS.md
+
+# Database
+database/*.sql
+!database/schema.sql
+
+# Build artifacts
+/tmp/
+
